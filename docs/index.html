@@ -153,6 +153,9 @@
     // Helper: Adjust the answer based on function and quadrant.
     function getAdjustedAnswer(func, base, quadrant) {
       let val = baseValues[func][base];
+      if (val === "0") {
+        return "0";
+    }
       if (func === "sin") {
         if (quadrant === 3 || quadrant === 4) return "-" + val;
       } else if (func === "cos") {
