@@ -7,12 +7,12 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.3/dist/katex.min.css">
   <style>
     body { margin: 0; padding: 0; font-family: sans-serif; background: #f2f2f2; }
-    
+
     /* Container for the game view */
     #game-container {
       position: relative;
-      width: 960px;
-      height: 720px;
+      width: 640px;
+      height: 480px;
       margin: 20px auto;
       background: #fff;
       border: 2px solid #333;
@@ -68,7 +68,7 @@
     }
     /* Food elements are absolutely positioned divs */
     .food { position: absolute; width: 20px; height: 20px; pointer-events: none; }
-    
+
     /* Main menu styling: a sexier homepage */
     #menu {
       width: 640px;
@@ -100,7 +100,7 @@
     .button:hover { background: rgba(255,255,255,1); }
     /* TIP text styling on the homepage */
     #tip { margin-top: 10px; font-size: 14px; color: #fff; font-style: italic; }
-    
+
     /* Settings screen styling: updated to be more visually appealing */
     #settings {
       width: 640px;
@@ -183,8 +183,8 @@
       const settingsDiv = document.getElementById("settings");
 
       const CELL_SIZE = 20;
-      const GRID_WIDTH = 960 / CELL_SIZE;
-      const GRID_HEIGHT = 720 / CELL_SIZE; // canvas height is 400
+      const GRID_WIDTH = 640 / CELL_SIZE;
+      const GRID_HEIGHT = 400 / CELL_SIZE; // canvas height is 400
 
       let gameInterval;
       let gameState = "menu"; // "menu", "settings", "playing"
