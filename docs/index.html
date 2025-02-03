@@ -98,6 +98,8 @@
       transition: background 0.3s;
     }
     .button:hover { background: rgba(255,255,255,1); }
+    /* TIP text styling on the homepage */
+    #tip { margin-top: 10px; font-size: 14px; color: #fff; font-style: italic; }
     
     /* Settings screen styling: updated to be more visually appealing */
     #settings {
@@ -131,10 +133,11 @@
   <div id="menu">
     <h1>Unit Circle Snake Game</h1>
     <p id="welcome">
-      Welcome to my Unit Circle Snake Game, for PC/Mac only (for now)! It plays like a normal snake game, except you can only grow by eating the correct answer to the question at the top of the screen. You have three wrong mistakes before the game is over! Use the settings to control which functions and quadrants are included. I hope this is helpful! TIP: go around in circles if you need time to think of the correct answer!
+      Welcome to my Unit Circle Snake Game! It plays like a normal snake game, except you can only grow by eating the correct answer to the question at the top of the screen. You have three wrong mistakes before the game is over! Use the settings to control which functions and quadrants are included. I hope this is helpful!
     </p>
     <button id="playButton" class="button">Play</button>
     <button id="settingsButton" class="button">Settings</button>
+    <p id="tip">TIP: go around in circles if you need time to think of the correct answer!</p>
   </div>
   <!-- Settings Screen -->
   <div id="settings" style="display:none;">
@@ -329,6 +332,7 @@
       }
 
       // Get a random food position with a margin of 4 cells and at least 4 cells apart.
+      // Also ensure the candidate cell is not in the snake’s current path (next 3 cells ahead).
       function getRandomFoodPosition(snakePositions, currentFoods) {
         let margin = 4;
         while (true) {
@@ -338,6 +342,19 @@
           if (conflict) continue;
           conflict = currentFoods.some(f => Math.abs(f.pos.x - x) < 4 && Math.abs(f.pos.y - y) < 4);
           if (conflict) continue;
+          // Also, prevent food spawning in the snake's current path (next 3 cells ahead)
+          if (snakePositions.length > 0) {
+            let head = snakePositions[0];
+            for (let k = 1; k <= 3; k++) {
+              let prohibitedX = head.x + k * direction.x;
+              let prohibitedY = head.y + k * direction.y;
+              if (x === prohibitedX && y === prohibitedY) {
+                conflict = true;
+                break;
+              }
+            }
+            if (conflict) continue;
+          }
           return { x, y };
         }
       }
@@ -350,7 +367,7 @@
           let div = document.createElement("div");
           div.className = "food";
           div.style.left = (food.pos.x * CELL_SIZE) + "px";
-          div.style.top = ((food.pos.y * CELL_SIZE) + 80) + "px"; // offset for question area
+          div.style.top = ((food.pos.y * CELL_SIZE) + 80) + "px";
           katex.render(food.value, div, { throwOnError: false, displayMode: false });
           gameContainer.appendChild(div);
           foodElements.push(div);
@@ -394,114 +411,3 @@
         }
         snake.unshift(newHead);
         // Check collision: if snake head is within 1 cell (both x and y) of a food cell.
-        let hitFoodIndex = foods.findIndex(f =>
-          Math.abs(newHead.x - f.pos.x) <= 1 && Math.abs(newHead.y - f.pos.y) <= 1
-        );
-        if (hitFoodIndex !== -1) {
-          let food = foods[hitFoodIndex];
-          if (food.value === correctAnswer) {
-            score++;
-            updateScore();
-            currentQuestion = generateQuestion();
-            correctAnswer = currentQuestion.answerLatex;
-            foods = generateFoods(currentQuestion.func, correctAnswer, snake);
-            updateFoodElements();
-            updateQuestion();
-          } else {
-            lives--;
-            updateLives();
-            foods.splice(hitFoodIndex, 1);
-            let fe = foodElements.splice(hitFoodIndex, 1)[0];
-            fe.remove();
-            snake.pop();
-            if (lives <= 0) {
-              endGame();
-              return;
-            }
-          }
-        } else {
-          snake.pop();
-        }
-        drawGame();
-      }
-
-      // End game: stop game loop and display Game Over overlay.
-      function endGame() {
-        clearInterval(gameInterval);
-        displayGameOver();
-      }
-
-      // Display Game Over message on-screen with a return button.
-      function displayGameOver() {
-        gameOverDiv.style.display = "flex";
-        gameOverDiv.innerHTML = `
-          <div style="text-align:center;">
-            <h1>Game Over</h1>
-            <p>Your Score: ${score}</p>
-            <button id="returnButton" class="button">Return to Menu</button>
-          </div>
-        `;
-        document.getElementById("returnButton").addEventListener("click", showMenu);
-      }
-
-      // Handle keyboard input for direction changes.
-      document.addEventListener("keydown", function(e) {
-        if (gameState !== "playing") return;
-        if (e.key === "ArrowUp" && direction.y !== 1) {
-          direction = { x: 0, y: -1 };
-        } else if (e.key === "ArrowDown" && direction.y !== -1) {
-          direction = { x: 0, y: 1 };
-        } else if (e.key === "ArrowLeft" && direction.x !== 1) {
-          direction = { x: -1, y: 0 };
-        } else if (e.key === "ArrowRight" && direction.x !== -1) {
-          direction = { x: 1, y: 0 };
-        }
-      });
-
-      // Menu and settings handling.
-      document.getElementById("playButton").addEventListener("click", function() {
-        showGame();
-      });
-      document.getElementById("settingsButton").addEventListener("click", function() {
-        showSettings();
-      });
-      document.getElementById("backButton").addEventListener("click", function() {
-        settings.functions.sin = document.getElementById("sinCheckbox").checked;
-        settings.functions.cos = document.getElementById("cosCheckbox").checked;
-        settings.functions.tan = document.getElementById("tanCheckbox").checked;
-        settings.quadrants[1] = document.getElementById("quad1").checked;
-        settings.quadrants[2] = document.getElementById("quad2").checked;
-        settings.quadrants[3] = document.getElementById("quad3").checked;
-        settings.quadrants[4] = document.getElementById("quad4").checked;
-        showMenu();
-      });
-
-      function showMenu() {
-        gameState = "menu";
-        menuDiv.style.display = "flex";
-        settingsDiv.style.display = "none";
-        gameContainer.style.display = "none";
-        gameOverDiv.style.display = "none";
-      }
-      function showSettings() {
-        gameState = "settings";
-        menuDiv.style.display = "none";
-        settingsDiv.style.display = "flex";
-        gameContainer.style.display = "none";
-      }
-      function showGame() {
-        gameState = "playing";
-        menuDiv.style.display = "none";
-        settingsDiv.style.display = "none";
-        gameContainer.style.display = "block";
-        gameOverDiv.style.display = "none";
-        initGame();
-        gameInterval = setInterval(updateGame, 1000 / 10);
-      }
-
-      // Start at the main menu.
-      showMenu();
-    });
-  </script>
-</body>
-</html>
