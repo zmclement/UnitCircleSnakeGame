@@ -9,24 +9,28 @@
     body { margin: 0; padding: 0; font-family: sans-serif; background: #f2f2f2; }
     /* Container for the game view */
     #game-container { position: relative; width: 640px; height: 480px; margin: 20px auto; background: #fff; border: 2px solid #333; }
-    /* Canvas for drawing snake and grid */
+    /* Canvas for drawing snake (no grid lines now) */
     canvas { position: absolute; top: 80px; left: 0; }
     /* The question div at the top */
     #question { position: absolute; top: 0; left: 0; width: 100%; height: 80px; background: #eee; border-bottom: 2px solid #333; display: flex; align-items: center; justify-content: center; font-size: 24px; }
-    /* Lives indicator (using hearts) */
+    /* Lives indicator */
     #lives { position: absolute; top: 10px; right: 10px; font-size: 24px; color: red; }
     /* Food elements are absolutely positioned divs */
     .food { position: absolute; width: 20px; height: 20px; pointer-events: none; }
-    /* Simple menu and settings styles */
-    #menu, #settings { width: 640px; height: 480px; margin: 20px auto; background: #f2f2f2; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    /* Menu and settings styling */
+    #menu, #settings { width: 640px; height: 480px; margin: 20px auto; background: #f2f2f2; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
     .button { margin: 10px; padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
     .checkbox { margin: 5px; }
+    #welcome { margin: 20px; font-size: 16px; }
   </style>
 </head>
 <body>
   <!-- Main Menu -->
   <div id="menu">
     <h1>Unit Circle Snake Game</h1>
+    <p id="welcome">
+      Welcome to my Unit Circle Snake Game! It plays like a normal snake game, except you can only grow by eating the correct answer to the question at the top of the screen. You have three wrong mistakes before the game is over! Use the settings to control which functions and quadrants are included. I hope this is helpful!
+    </p>
     <button id="playButton" class="button">Play</button>
     <button id="settingsButton" class="button">Settings</button>
   </div>
@@ -67,7 +71,7 @@
 
     const CELL_SIZE = 20;
     const GRID_WIDTH = 640 / CELL_SIZE;
-    const GRID_HEIGHT = 400 / CELL_SIZE; // canvas height is 400 (game board area)
+    const GRID_HEIGHT = 400 / CELL_SIZE; // canvas height is 400
 
     let gameInterval;
     let gameState = "menu"; // "menu", "settings", "playing"
@@ -131,17 +135,22 @@
       } else if (quadrant === 4) {
         full = 2 * Math.PI - angle;
       }
-      // For our allowed angles, we know the fractional forms.
+      // Determine denominator based on base angle.
       let denom;
       if (base === "pi/6") denom = 6;
       else if (base === "pi/4") denom = 4;
       else if (base === "pi/3") denom = 3;
       let ratio = full / Math.PI;
       let numerator = Math.round(ratio * denom);
-      return "\\frac{" + numerator + "\\pi}{" + denom + "}";
+      // If numerator is 1, return without the 1.
+      if (numerator === 1) {
+        return "\\frac{\\pi}{" + denom + "}";
+      } else {
+        return "\\frac{" + numerator + "\\pi}{" + denom + "}";
+      }
     }
 
-    // Helper: Adjust the answer based on function and quadrant (adds minus sign as needed).
+    // Helper: Adjust the answer based on function and quadrant.
     function getAdjustedAnswer(func, base, quadrant) {
       let val = baseValues[func][base];
       if (func === "sin") {
@@ -190,7 +199,7 @@
       updateLives();
     }
 
-    // Generate foods (one correct and three distractors)
+    // Generate foods (one correct answer and three distractors)
     function generateFoods(func, correctAnswer, snakePositions) {
       let possible = new Set();
       let bases = (func === "tan") ? ["pi/6", "pi/4", "pi/3"] : ["pi/6", "pi/4", "pi/3", "pi/2"];
@@ -201,7 +210,6 @@
       }
       possible.delete(correctAnswer);
       let distractors = Array.from(possible);
-      // Randomly pick up to 3 distractors
       distractors = distractors.sort(() => Math.random() - 0.5).slice(0, Math.min(3, distractors.length));
       let foodValues = distractors.concat([correctAnswer]);
       foodValues = foodValues.sort(() => Math.random() - 0.5);
@@ -213,14 +221,15 @@
       return generatedFoods;
     }
 
+    // Get a random food position with a margin of 4 cells and ensuring foods are at least 4 cells apart.
     function getRandomFoodPosition(snakePositions, currentFoods) {
-      let margin = 3;
+      let margin = 4;
       while (true) {
         let x = Math.floor(Math.random() * (GRID_WIDTH - 2 * margin)) + margin;
         let y = Math.floor(Math.random() * (GRID_HEIGHT - 2 * margin)) + margin;
         let conflict = snakePositions.some(s => s.x === x && s.y === y);
         if (conflict) continue;
-        conflict = currentFoods.some(f => Math.abs(f.pos.x - x) < 3 && Math.abs(f.pos.y - y) < 3);
+        conflict = currentFoods.some(f => Math.abs(f.pos.x - x) < 4 && Math.abs(f.pos.y - y) < 4);
         if (conflict) continue;
         return { x, y };
       }
@@ -228,7 +237,6 @@
 
     // Create or update food HTML elements (using KaTeX)
     function updateFoodElements() {
-      // Remove old food elements
       foodElements.forEach(el => el.remove());
       foodElements = [];
       for (let food of foods) {
@@ -252,23 +260,9 @@
       livesDiv.innerHTML = "♥".repeat(lives);
     }
 
-    // Draw the game board and snake on the canvas
+    // Draw the game board and snake on the canvas (without grid lines)
     function drawGame() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      // Optional grid lines
-      ctx.strokeStyle = "#ddd";
-      for (let i = 0; i <= GRID_WIDTH; i++) {
-        ctx.beginPath();
-        ctx.moveTo(i * CELL_SIZE, 0);
-        ctx.lineTo(i * CELL_SIZE, canvas.height);
-        ctx.stroke();
-      }
-      for (let j = 0; j <= GRID_HEIGHT; j++) {
-        ctx.beginPath();
-        ctx.moveTo(0, j * CELL_SIZE);
-        ctx.lineTo(canvas.width, j * CELL_SIZE);
-        ctx.stroke();
-      }
       // Draw snake
       ctx.fillStyle = "green";
       for (let cell of snake) {
@@ -279,24 +273,21 @@
     // Game update: move snake, check collisions, update state.
     function updateGame() {
       let newHead = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
-      // Check wall collisions
       if (newHead.x < 0 || newHead.x >= GRID_WIDTH || newHead.y < 0 || newHead.y >= GRID_HEIGHT) {
         endGame();
         return;
       }
-      // Check self-collision
       if (snake.some(cell => cell.x === newHead.x && cell.y === newHead.y)) {
         endGame();
         return;
       }
       snake.unshift(newHead);
-      // Check if snake head is on a food cell (if any part of snake's head cell touches the food cell)
-      let hitFoodIndex = foods.findIndex(f => f.pos.x === newHead.x && f.pos.y === newHead.y);
+      // Collision: if snake head is within 1 cell in both directions of a food cell.
+      let hitFoodIndex = foods.findIndex(f => Math.abs(newHead.x - f.pos.x) <= 1 && Math.abs(newHead.y - f.pos.y) <= 1);
       if (hitFoodIndex !== -1) {
         let food = foods[hitFoodIndex];
         if (food.value === correctAnswer) {
           score++;
-          // Generate new question and foods
           currentQuestion = generateQuestion();
           correctAnswer = currentQuestion.answerLatex;
           foods = generateFoods(currentQuestion.func, correctAnswer, snake);
@@ -304,20 +295,17 @@
           updateQuestion();
         } else {
           lives--;
-          updateLives();
-          // Remove the wrong food
           foods.splice(hitFoodIndex, 1);
           let fe = foodElements.splice(hitFoodIndex, 1)[0];
           fe.remove();
-          // Do not grow the snake
-          snake.pop();
+          snake.pop(); // Do not grow.
+          updateLives();
           if (lives <= 0) {
             endGame();
             return;
           }
         }
       } else {
-        // Normal move: remove tail
         snake.pop();
       }
       drawGame();
@@ -351,7 +339,6 @@
       showSettings();
     });
     document.getElementById("backButton").addEventListener("click", function() {
-      // Update settings from checkboxes
       settings.functions.sin = document.getElementById("sinCheckbox").checked;
       settings.functions.cos = document.getElementById("cosCheckbox").checked;
       settings.functions.tan = document.getElementById("tanCheckbox").checked;
