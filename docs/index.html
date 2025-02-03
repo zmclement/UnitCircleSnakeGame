@@ -11,8 +11,8 @@
     /* Container for the game view */
     #game-container {
       position: relative;
-      width: 640px;
-      height: 480px;
+      width: 1280px;
+      height: 960px;
       margin: 20px auto;
       background: #fff;
       border: 2px solid #333;
@@ -514,7 +514,7 @@
         gameContainer.style.display = "block";
         gameOverDiv.style.display = "none";
         initGame();
-        gameInterval = setInterval(updateGame, 1000 / 8);
+        gameInterval = setInterval(updateGame, 1000 / 10);
       }
 
       // Start at the main menu.
