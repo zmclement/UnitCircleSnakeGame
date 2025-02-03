@@ -1,535 +1,390 @@
-import pygame
-import sys
-import random
-import math
-import io
-import matplotlib
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Unit Circle Snake Game</title>
+  <!-- KaTeX CSS for math rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.3/dist/katex.min.css">
+  <style>
+    body { margin: 0; padding: 0; font-family: sans-serif; background: #f2f2f2; }
+    /* Container for the game view */
+    #game-container { position: relative; width: 640px; height: 480px; margin: 20px auto; background: #fff; border: 2px solid #333; }
+    /* Canvas for drawing snake and grid */
+    canvas { position: absolute; top: 80px; left: 0; }
+    /* The question div at the top */
+    #question { position: absolute; top: 0; left: 0; width: 100%; height: 80px; background: #eee; border-bottom: 2px solid #333; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+    /* Lives indicator (using hearts) */
+    #lives { position: absolute; top: 10px; right: 10px; font-size: 24px; color: red; }
+    /* Food elements are absolutely positioned divs */
+    .food { position: absolute; width: 20px; height: 20px; pointer-events: none; }
+    /* Simple menu and settings styles */
+    #menu, #settings { width: 640px; height: 480px; margin: 20px auto; background: #f2f2f2; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .button { margin: 10px; padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+    .checkbox { margin: 5px; }
+  </style>
+</head>
+<body>
+  <!-- Main Menu -->
+  <div id="menu">
+    <h1>Unit Circle Snake Game</h1>
+    <button id="playButton" class="button">Play</button>
+    <button id="settingsButton" class="button">Settings</button>
+  </div>
+  <!-- Settings Screen -->
+  <div id="settings" style="display:none;">
+    <h1>Settings</h1>
+    <div>
+      <label class="checkbox"><input type="checkbox" id="sinCheckbox" checked> sin</label>
+      <label class="checkbox"><input type="checkbox" id="cosCheckbox" checked> cos</label>
+      <label class="checkbox"><input type="checkbox" id="tanCheckbox" checked> tan</label>
+    </div>
+    <div>
+      <label class="checkbox"><input type="checkbox" id="quad1" checked> Quadrant 1</label>
+      <label class="checkbox"><input type="checkbox" id="quad2" checked> Quadrant 2</label>
+      <label class="checkbox"><input type="checkbox" id="quad3" checked> Quadrant 3</label>
+      <label class="checkbox"><input type="checkbox" id="quad4" checked> Quadrant 4</label>
+    </div>
+    <button id="backButton" class="button">Back</button>
+  </div>
+  <!-- Game View -->
+  <div id="game-container" style="display:none;">
+    <div id="question"></div>
+    <div id="lives"></div>
+    <canvas id="gameCanvas" width="640" height="400"></canvas>
+  </div>
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+  <!-- Load KaTeX -->
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.15.3/dist/katex.min.js"></script>
+  <script>
+    // Global variables and constants
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const questionDiv = document.getElementById("question");
+    const livesDiv = document.getElementById("lives");
+    const gameContainer = document.getElementById("game-container");
+    const menuDiv = document.getElementById("menu");
+    const settingsDiv = document.getElementById("settings");
 
-# ------------------------------
-# Global Constants and Settings
-# ------------------------------
-SCREEN_WIDTH = 640
-SCREEN_HEIGHT = 480
-CELL_SIZE = 20
-TOP_MARGIN = 80  # Reserve space at the top for the question bar
+    const CELL_SIZE = 20;
+    const GRID_WIDTH = 640 / CELL_SIZE;
+    const GRID_HEIGHT = 400 / CELL_SIZE; // canvas height is 400 (game board area)
 
-# The grid now covers the play area (excluding the top margin)
-GRID_WIDTH = SCREEN_WIDTH // CELL_SIZE
-GRID_HEIGHT = (SCREEN_HEIGHT - TOP_MARGIN) // CELL_SIZE
+    let gameInterval;
+    let gameState = "menu"; // "menu", "settings", "playing"
 
-FPS = 10
+    // Settings for functions and quadrants
+    let settings = {
+      functions: { sin: true, cos: true, tan: true },
+      quadrants: { 1: true, 2: true, 3: true, 4: true }
+    };
 
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-GREEN = (0, 180, 0)
-DARKGREEN = (0, 120, 0)
-RED = (200, 0, 0)
-DARKRED = (150, 0, 0)
-BLUE = (0, 0, 200)
-DARKBLUE = (0, 0, 150)
-GRAY = (200, 200, 200)
-DARKGRAY = (50, 50, 50)
+    // Game state variables
+    let snake;
+    let direction;
+    let foods;
+    let currentQuestion;
+    let correctAnswer;
+    let lives;
+    let score;
+    let foodElements = [];  // HTML elements for foods
 
-# -------------------------------------------
-# Unit Circle Values (only standard angles)
-# -------------------------------------------
-# For sin and cos: π/6, π/4, π/3, π/2.
-# For tan: π/6, π/4, π/3.
-base_vals = {
-    "sin": {
-        math.pi / 6: r"\frac{1}{2}",
-        math.pi / 4: r"\frac{\sqrt{2}}{2}",
-        math.pi / 3: r"\frac{\sqrt{3}}{2}",
-        math.pi / 2: "1"
-    },
-    "cos": {
-        math.pi / 6: r"\frac{\sqrt{3}}{2}",
-        math.pi / 4: r"\frac{\sqrt{2}}{2}",
-        math.pi / 3: r"\frac{1}{2}",
-        math.pi / 2: "0"
-    },
-    "tan": {
-        math.pi / 6: r"\frac{1}{\sqrt{3}}",
-        math.pi / 4: "1",
-        math.pi / 3: r"\sqrt{3}"
+    // Base values for each function (LaTeX strings)
+    const baseValues = {
+      sin: {
+        "pi/6": "\\frac{1}{2}",
+        "pi/4": "\\frac{\\sqrt{2}}{2}",
+        "pi/3": "\\frac{\\sqrt{3}}{2}",
+        "pi/2": "1"
+      },
+      cos: {
+        "pi/6": "\\frac{\\sqrt{3}}{2}",
+        "pi/4": "\\frac{\\sqrt{2}}{2}",
+        "pi/3": "\\frac{1}{2}",
+        "pi/2": "0"
+      },
+      tan: {
+        "pi/6": "\\frac{1}{\\sqrt{3}}",
+        "pi/4": "1",
+        "pi/3": "\\sqrt{3}"
+      }
+    };
+    const baseAngles = {
+      "pi/6": Math.PI / 6,
+      "pi/4": Math.PI / 4,
+      "pi/3": Math.PI / 3,
+      "pi/2": Math.PI / 2
+    };
+
+    // Helper: Format the full angle (as LaTeX) based on a base and quadrant.
+    function formatAngle(base, quadrant) {
+      let angle = baseAngles[base];
+      if (base === "pi/2") {
+        return (quadrant <= 2) ? "\\frac{\\pi}{2}" : "\\frac{3\\pi}{2}";
+      }
+      let full;
+      if (quadrant === 1) {
+        full = angle;
+      } else if (quadrant === 2) {
+        full = Math.PI - angle;
+      } else if (quadrant === 3) {
+        full = Math.PI + angle;
+      } else if (quadrant === 4) {
+        full = 2 * Math.PI - angle;
+      }
+      // For our allowed angles, we know the fractional forms.
+      let denom;
+      if (base === "pi/6") denom = 6;
+      else if (base === "pi/4") denom = 4;
+      else if (base === "pi/3") denom = 3;
+      let ratio = full / Math.PI;
+      let numerator = Math.round(ratio * denom);
+      return "\\frac{" + numerator + "\\pi}{" + denom + "}";
     }
-}
 
-# For constructing full-angle LaTeX strings.
-angle_fractions = {
-    math.pi / 6: (1, 6),
-    math.pi / 4: (1, 4),
-    math.pi / 3: (1, 3),
-    math.pi / 2: (1, 2)
-}
-
-# --------------------------------------------------
-# Caching for rendered LaTeX text (via matplotlib)
-# --------------------------------------------------
-latex_cache = {}
-
-
-def render_latex(text, fontsize=24, color="black"):
-    """
-    Render a LaTeX string (without surrounding $…$) to a pygame Surface.
-    Uses matplotlib to produce a PNG image (cached for performance).
-    """
-    key = (text, fontsize, color)
-    if key in latex_cache:
-        return latex_cache[key]
-    fig = plt.figure(figsize=(0.01, 0.01))
-    fig.text(0, 0, f"${text}$", fontsize=fontsize, color=color)
-    buffer = io.BytesIO()
-    plt.axis('off')
-    plt.savefig(buffer, format='png', bbox_inches='tight', pad_inches=0.1)
-    plt.close(fig)
-    buffer.seek(0)
-    image = pygame.image.load(buffer)
-    image = image.convert_alpha()
-    latex_cache[key] = image
-    return image
-
-
-# ---------------------------------------------------
-# Calculate the full angle in LaTeX given a base angle and quadrant.
-# ---------------------------------------------------
-def get_full_angle_latex(base_angle, quadrant):
-    if abs(base_angle - math.pi / 2) < 1e-6:
-        return r"\frac{\pi}{2}" if quadrant in [1, 2] else r"\frac{3\pi}{2}"
-    num, den = angle_fractions[base_angle]
-    if quadrant == 1:
-        n = num
-    elif quadrant == 2:
-        n = den - num
-    elif quadrant == 3:
-        n = den + num
-    elif quadrant == 4:
-        n = 2 * den - num
-    return r"\frac{" + (f"{n}\pi" if n != 1 else r"\pi") + r"}{" + str(den) + "}"
-
-
-# ---------------------------------------------------
-# Given a trig function, base angle, and quadrant, return the LaTeX–formatted answer.
-# ---------------------------------------------------
-def get_adjusted_answer(func, base_angle, quadrant):
-    value_str = base_vals[func][base_angle]
-    if value_str == "0":
-        return "0"
-    if func == "sin":
-        return ("-" if quadrant in [3, 4] else "") + value_str
-    elif func == "cos":
-        return ("-" if quadrant in [2, 3] else "") + value_str
-    elif func == "tan":
-        return ("-" if quadrant in [2, 4] else "") + value_str
-
-
-# ---------------------------------------------------
-# Generate a new question based on settings.
-# ---------------------------------------------------
-def generate_question(settings):
-    enabled_funcs = [f for f, enabled in settings["functions"].items() if enabled]
-    enabled_quads = [q for q, enabled in settings["quadrants"].items() if enabled]
-    if not enabled_funcs or not enabled_quads:
-        enabled_funcs = ["sin"]
-        enabled_quads = [1]
-    func = random.choice(enabled_funcs)
-    valid_bases = list(base_vals[func].keys())
-    base_angle = random.choice(valid_bases)
-    quadrant = random.choice(enabled_quads)
-    angle_latex = get_full_angle_latex(base_angle, quadrant)
-    question_str = f"{func}({angle_latex})"
-    correct_answer = get_adjusted_answer(func, base_angle, quadrant)
-    return func, question_str, correct_answer
-
-
-# ---------------------------------------------------
-# Get a random grid cell for a food.
-# Foods now spawn with a margin of 3 cells from the edges.
-# Also, ensure that foods are at least 3 cells apart.
-# ---------------------------------------------------
-def get_random_food_position(snake_positions, current_foods):
-    margin = 3
-    while True:
-        x = random.randint(margin, GRID_WIDTH - margin - 1)
-        y = random.randint(margin, GRID_HEIGHT - margin - 1)
-        if (x, y) in snake_positions:
-            continue
-        conflict = False
-        for food in current_foods:
-            fx, fy = food["pos"]
-            if abs(x - fx) < 3 and abs(y - fy) < 3:
-                conflict = True
-                break
-        if conflict:
-            continue
-        return (x, y)
-
-
-# ---------------------------------------------------
-# Generate food items: one correct answer and distractors.
-# ---------------------------------------------------
-def generate_foods(func, correct_answer, snake_positions):
-    possible_answers = set()
-    for base in base_vals[func]:
-        for quad in [1, 2, 3, 4]:
-            possible_answers.add(get_adjusted_answer(func, base, quad))
-    if correct_answer in possible_answers:
-        possible_answers.remove(correct_answer)
-    num_distractors = min(3, len(possible_answers))
-    distractors = random.sample(list(possible_answers), num_distractors)
-    food_values = distractors + [correct_answer]
-    random.shuffle(food_values)
-    foods = []
-    for value in food_values:
-        pos = get_random_food_position(snake_positions, foods)
-        foods.append({"pos": pos, "value": value})
-    return foods
-
-
-# ---------------------------------------------------
-# Collision Check for Food.
-# Instead of exact cell equality, we compute the distance between centers.
-# If the distance is less than a threshold (15 pixels), we count it as a hit.
-# ---------------------------------------------------
-def food_collision(snake_cell, food_cell):
-    # Convert cell coordinates to pixel centers.
-    snake_x = snake_cell[0] * CELL_SIZE + CELL_SIZE / 2
-    snake_y = snake_cell[1] * CELL_SIZE + TOP_MARGIN + CELL_SIZE / 2
-    food_x = food_cell[0] * CELL_SIZE + CELL_SIZE / 2
-    food_y = food_cell[1] * CELL_SIZE + TOP_MARGIN + CELL_SIZE / 2
-    dx = snake_x - food_x
-    dy = snake_y - food_y
-    dist = math.sqrt(dx * dx + dy * dy)
-    return dist < 30
-
-
-# ---------------------------------------------------
-# Create Heart Sprite (Lives Indicator) procedurally.
-# This function draws a heart shape on a transparent Surface.
-# ---------------------------------------------------
-def create_heart_sprite(size):
-    """
-    Create a heart-shaped Surface of dimensions (size x size).
-    Draw two circles and a triangle to simulate a heart.
-    """
-    heart = pygame.Surface((size, size), pygame.SRCALPHA)
-    red = (255, 0, 0)
-    # Draw the left circle.
-    pygame.draw.circle(heart, red, (size // 3, size // 3), size // 3)
-    # Draw the right circle.
-    pygame.draw.circle(heart, red, (2 * size // 3, size // 3), size // 3)
-    # Draw the bottom triangle.
-    pygame.draw.polygon(heart, red, [(0, size // 3), (size, size // 3), (size // 2, size)])
-    return heart
-
-
-# Preload the heart sprite (28x28 pixels).
-HEART_SPRITE = create_heart_sprite(28)
-
-
-# ---------------------------------------------------
-# UI Elements: Button and Checkbox
-# ---------------------------------------------------
-class Button:
-    def __init__(self, rect, text, font_size=36, bg_color=GRAY):
-        self.rect = pygame.Rect(rect)
-        self.text = text
-        self.bg_color = bg_color
-        self.font = pygame.font.SysFont(None, font_size)
-
-    def draw(self, surface):
-        pygame.draw.rect(surface, self.bg_color, self.rect, border_radius=8)
-        pygame.draw.rect(surface, BLACK, self.rect, 2, border_radius=8)
-        text_surf = self.font.render(self.text, True, BLACK)
-        text_rect = text_surf.get_rect(center=self.rect.center)
-        surface.blit(text_surf, text_rect)
-
-    def is_clicked(self, pos):
-        return self.rect.collidepoint(pos)
-
-
-class Checkbox:
-    def __init__(self, rect, text, checked=False, font_size=28):
-        self.rect = pygame.Rect(rect)
-        self.text = text
-        self.checked = checked
-        self.font = pygame.font.SysFont(None, font_size)
-        self.hitbox = self.rect.inflate(10, 10)
-
-    def draw(self, surface):
-        # Draw rounded rectangle for the box.
-        pygame.draw.rect(surface, WHITE, self.rect, border_radius=5)
-        pygame.draw.rect(surface, BLACK, self.rect, 2, border_radius=5)
-        if self.checked:
-            start = (self.rect.left + 5, self.rect.centery)
-            mid = (self.rect.left + self.rect.width // 3, self.rect.bottom - 5)
-            end = (self.rect.right - 5, self.rect.top + 5)
-            pygame.draw.lines(surface, DARKGREEN, False, [start, mid, end], 3)
-        # Draw label to the right.
-        text_surf = self.font.render(self.text, True, BLACK)
-        text_rect = text_surf.get_rect(midleft=(self.rect.right + 10, self.rect.centery))
-        surface.blit(text_surf, text_rect)
-
-    def toggle(self):
-        self.checked = not self.checked
-
-    def is_clicked(self, pos):
-        return self.hitbox.collidepoint(pos)
-
-
-# -----------------------
-# Main Menu Functionality
-# -----------------------
-def main_menu(screen):
-    clock = pygame.time.Clock()
-    title_font = pygame.font.SysFont(None, 60)
-    play_button = Button((SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 60, 200, 50), "Play", font_size=40)
-    settings_button = Button((SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 10, 200, 50), "Settings", font_size=40)
-
-    while True:
-        screen.fill(WHITE)
-        title_surf = title_font.render("Unit Circle Snake Game", True, DARKRED)
-        title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
-        screen.blit(title_surf, title_rect)
-        play_button.draw(screen)
-        settings_button.draw(screen)
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit();
-                sys.exit()
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                if play_button.is_clicked(pos):
-                    return "PLAYING"
-                if settings_button.is_clicked(pos):
-                    return "SETTINGS"
-
-        pygame.display.flip()
-        clock.tick(30)
-
-
-# --------------------------
-# Settings Menu Functionality
-# --------------------------
-def settings_menu(screen, settings):
-    clock = pygame.time.Clock()
-    title_font = pygame.font.SysFont(None, 60)
-
-    # Create checkboxes for trig functions.
-    func_checkboxes = []
-    funcs = ["sin", "cos", "tan"]
-    for i, func in enumerate(funcs):
-        cb = Checkbox((100, 120 + i * 50, 40, 40), func, settings["functions"].get(func, True))
-        func_checkboxes.append(cb)
-
-    # Create checkboxes for quadrants.
-    quad_checkboxes = []
-    for q in [1, 2, 3, 4]:
-        cb = Checkbox((350, 120 + (q - 1) * 50, 40, 40), f"Quadrant {q}", settings["quadrants"].get(q, True))
-        quad_checkboxes.append(cb)
-
-    back_button = Button((SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 80, 100, 40), "Back", font_size=30)
-
-    while True:
-        screen.fill(WHITE)
-        title_surf = title_font.render("Settings", True, DARKBLUE)
-        title_rect = title_surf.get_rect(center=(SCREEN_WIDTH // 2, 50))
-        screen.blit(title_surf, title_rect)
-
-        for cb in func_checkboxes:
-            cb.draw(screen)
-        for cb in quad_checkboxes:
-            cb.draw(screen)
-        back_button.draw(screen)
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit();
-                sys.exit()
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                for cb in func_checkboxes:
-                    if cb.is_clicked(pos):
-                        cb.toggle()
-                for cb in quad_checkboxes:
-                    if cb.is_clicked(pos):
-                        cb.toggle()
-                if back_button.is_clicked(pos):
-                    # Update settings based on checkbox states.
-                    for cb in func_checkboxes:
-                        settings["functions"][cb.text] = cb.checked
-                    for cb in quad_checkboxes:
-                        q_num = int(cb.text.split()[-1])
-                        settings["quadrants"][q_num] = cb.checked
-                    return settings
-
-        pygame.display.flip()
-        clock.tick(30)
-
-
-# --------------------------
-# Draw the Game (Snake, Foods, UI)
-# --------------------------
-def draw_game(screen, snake, foods, question_str, lives):
-    screen.fill(WHITE)
-
-    # Draw the question bar (centered within TOP_MARGIN).
-    q_surface = render_latex(question_str, fontsize=32, color="black")
-    q_rect = q_surface.get_rect(center=(SCREEN_WIDTH // 2, TOP_MARGIN // 2))
-    screen.blit(q_surface, q_rect)
-
-    # Draw lives as heart sprites in the upper right.
-    spacing = 10
-    heart_width = HEART_SPRITE.get_width()
-    for i in range(lives):
-        x = SCREEN_WIDTH - (heart_width + spacing) * (i + 1)
-        y = 10
-        screen.blit(HEART_SPRITE, (x, y))
-
-    # Draw snake (offset by TOP_MARGIN).
-    for segment in snake:
-        rect = pygame.Rect(segment[0] * CELL_SIZE, segment[1] * CELL_SIZE + TOP_MARGIN, CELL_SIZE, CELL_SIZE)
-        pygame.draw.rect(screen, DARKGREEN, rect)
-        pygame.draw.rect(screen, GREEN, rect, 2)
-
-    # Draw foods using math text with a smaller fontsize (14).
-    for food in foods:
-        x, y = food["pos"]
-        food_surface = render_latex(food["value"], fontsize=14, color="black")
-        cell_rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE + TOP_MARGIN, CELL_SIZE, CELL_SIZE)
-        food_rect = food_surface.get_rect(center=cell_rect.center)
-        screen.blit(food_surface, food_rect)
-
-
-# --------------------------
-# Game Loop (PLAYING state)
-# --------------------------
-def game_loop(screen, settings):
-    clock = pygame.time.Clock()
-    # Initialize snake in center of board.
-    snake = [(GRID_WIDTH // 2, GRID_HEIGHT // 2)]
-    direction = (1, 0)
-    lives = 3
-    score = 0
-
-    func, question_str, correct_answer = generate_question(settings)
-    foods = generate_foods(func, correct_answer, snake)
-
-    running = True
-    while running:
-        clock.tick(FPS)
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit();
-                sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP and direction != (0, 1):
-                    direction = (0, -1)
-                elif event.key == pygame.K_DOWN and direction != (0, -1):
-                    direction = (0, 1)
-                elif event.key == pygame.K_LEFT and direction != (1, 0):
-                    direction = (-1, 0)
-                elif event.key == pygame.K_RIGHT and direction != (-1, 0):
-                    direction = (1, 0)
-
-        head_x, head_y = snake[0]
-        dx, dy = direction
-        new_head = (head_x + dx, head_y + dy)
-
-        # Check collision with walls (game board boundaries).
-        if new_head[0] < 0 or new_head[0] >= GRID_WIDTH or new_head[1] < 0 or new_head[1] >= GRID_HEIGHT:
-            running = False
-            continue
-
-        # Check collision with self.
-        if new_head in snake:
-            running = False
-            continue
-
-        snake.insert(0, new_head)
-
-        # Use our new collision function to detect food hits.
-        ate_food = False
-        food_eaten = None
-        for food in foods:
-            if food_collision(new_head, food["pos"]):
-                ate_food = True
-                food_eaten = food
-                break
-
-        if ate_food:
-            if food_eaten["value"] == correct_answer:
-                score += 1
-                func, question_str, correct_answer = generate_question(settings)
-                foods = generate_foods(func, correct_answer, snake)
-            else:
-                lives -= 1
-                foods.remove(food_eaten)
-                snake.pop()  # Do not grow.
-                if lives <= 0:
-                    running = False
-        else:
-            snake.pop()
-
-        draw_game(screen, snake, foods, question_str, lives)
-        pygame.display.flip()
-
-    game_over(screen, score)
-
-
-# --------------------------
-# Game Over Screen
-# --------------------------
-def game_over(screen, score):
-    clock = pygame.time.Clock()
-    font = pygame.font.SysFont(None, 60)
-    small_font = pygame.font.SysFont(None, 40)
-    while True:
-        screen.fill(WHITE)
-        over_text = font.render("Game Over", True, RED)
-        score_text = small_font.render("Score: " + str(score), True, BLACK)
-        prompt_text = small_font.render("Press Enter to return to menu", True, BLACK)
-        screen.blit(over_text, over_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 3)))
-        screen.blit(score_text, score_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 3 + 60)))
-        screen.blit(prompt_text, prompt_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 3 + 120)))
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit();
-                sys.exit()
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN:
-                    return
-        pygame.display.flip()
-        clock.tick(30)
-
-
-# --------------------------
-# Main Program Loop
-# --------------------------
-def main():
-    pygame.init()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Unit Circle Snake Game")
-    settings = {
-        "functions": {"sin": True, "cos": True, "tan": True},
-        "quadrants": {1: True, 2: True, 3: True, 4: True}
+    // Helper: Adjust the answer based on function and quadrant (adds minus sign as needed).
+    function getAdjustedAnswer(func, base, quadrant) {
+      let val = baseValues[func][base];
+      if (func === "sin") {
+        if (quadrant === 3 || quadrant === 4) return "-" + val;
+      } else if (func === "cos") {
+        if (quadrant === 2 || quadrant === 3) return "-" + val;
+      } else if (func === "tan") {
+        if (quadrant === 2 || quadrant === 4) return "-" + val;
+      }
+      return val;
     }
-    state = "MENU"
-    while True:
-        if state == "MENU":
-            next_state = main_menu(screen)
-            state = next_state
-        elif state == "SETTINGS":
-            settings = settings_menu(screen, settings)
-            state = "MENU"
-        elif state == "PLAYING":
-            game_loop(screen, settings)
-            state = "MENU"
 
+    // Generate a new question
+    function generateQuestion() {
+      let funcs = [];
+      for (let f in settings.functions) {
+        if (settings.functions[f]) funcs.push(f);
+      }
+      if (funcs.length === 0) funcs.push("sin");
+      let func = funcs[Math.floor(Math.random() * funcs.length)];
+      let bases = (func === "tan") ? ["pi/6", "pi/4", "pi/3"] : ["pi/6", "pi/4", "pi/3", "pi/2"];
+      let base = bases[Math.floor(Math.random() * bases.length)];
+      let quads = [];
+      for (let q in settings.quadrants) {
+        if (settings.quadrants[q]) quads.push(parseInt(q));
+      }
+      if (quads.length === 0) quads.push(1);
+      let quadrant = quads[Math.floor(Math.random() * quads.length)];
+      let angleStr = formatAngle(base, quadrant);
+      let questionLatex = func + "(" + angleStr + ")";
+      let answerLatex = getAdjustedAnswer(func, base, quadrant);
+      return { func, questionLatex, answerLatex, base, quadrant };
+    }
 
-if __name__ == "__main__":
-    main()
+    // Initialize game state
+    function initGame() {
+      snake = [{ x: Math.floor(GRID_WIDTH/2), y: Math.floor(GRID_HEIGHT/2) }];
+      direction = { x: 1, y: 0 };
+      lives = 3;
+      score = 0;
+      currentQuestion = generateQuestion();
+      correctAnswer = currentQuestion.answerLatex;
+      foods = generateFoods(currentQuestion.func, correctAnswer, snake);
+      updateFoodElements();
+      updateQuestion();
+      updateLives();
+    }
+
+    // Generate foods (one correct and three distractors)
+    function generateFoods(func, correctAnswer, snakePositions) {
+      let possible = new Set();
+      let bases = (func === "tan") ? ["pi/6", "pi/4", "pi/3"] : ["pi/6", "pi/4", "pi/3", "pi/2"];
+      for (let b of bases) {
+        for (let q = 1; q <= 4; q++) {
+          possible.add(getAdjustedAnswer(func, b, q));
+        }
+      }
+      possible.delete(correctAnswer);
+      let distractors = Array.from(possible);
+      // Randomly pick up to 3 distractors
+      distractors = distractors.sort(() => Math.random() - 0.5).slice(0, Math.min(3, distractors.length));
+      let foodValues = distractors.concat([correctAnswer]);
+      foodValues = foodValues.sort(() => Math.random() - 0.5);
+      let generatedFoods = [];
+      for (let value of foodValues) {
+        let pos = getRandomFoodPosition(snakePositions, generatedFoods);
+        generatedFoods.push({ pos, value });
+      }
+      return generatedFoods;
+    }
+
+    function getRandomFoodPosition(snakePositions, currentFoods) {
+      let margin = 3;
+      while (true) {
+        let x = Math.floor(Math.random() * (GRID_WIDTH - 2 * margin)) + margin;
+        let y = Math.floor(Math.random() * (GRID_HEIGHT - 2 * margin)) + margin;
+        let conflict = snakePositions.some(s => s.x === x && s.y === y);
+        if (conflict) continue;
+        conflict = currentFoods.some(f => Math.abs(f.pos.x - x) < 3 && Math.abs(f.pos.y - y) < 3);
+        if (conflict) continue;
+        return { x, y };
+      }
+    }
+
+    // Create or update food HTML elements (using KaTeX)
+    function updateFoodElements() {
+      // Remove old food elements
+      foodElements.forEach(el => el.remove());
+      foodElements = [];
+      for (let food of foods) {
+        let div = document.createElement("div");
+        div.className = "food";
+        div.style.left = (food.pos.x * CELL_SIZE) + "px";
+        div.style.top = ((food.pos.y * CELL_SIZE) + 80) + "px"; // offset for question area
+        katex.render(food.value, div, { throwOnError: false, displayMode: false });
+        gameContainer.appendChild(div);
+        foodElements.push(div);
+      }
+    }
+
+    // Update question display using KaTeX
+    function updateQuestion() {
+      katex.render(currentQuestion.questionLatex, questionDiv, { throwOnError: false, displayMode: true });
+    }
+
+    // Update lives display (using hearts)
+    function updateLives() {
+      livesDiv.innerHTML = "♥".repeat(lives);
+    }
+
+    // Draw the game board and snake on the canvas
+    function drawGame() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      // Optional grid lines
+      ctx.strokeStyle = "#ddd";
+      for (let i = 0; i <= GRID_WIDTH; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * CELL_SIZE, 0);
+        ctx.lineTo(i * CELL_SIZE, canvas.height);
+        ctx.stroke();
+      }
+      for (let j = 0; j <= GRID_HEIGHT; j++) {
+        ctx.beginPath();
+        ctx.moveTo(0, j * CELL_SIZE);
+        ctx.lineTo(canvas.width, j * CELL_SIZE);
+        ctx.stroke();
+      }
+      // Draw snake
+      ctx.fillStyle = "green";
+      for (let cell of snake) {
+        ctx.fillRect(cell.x * CELL_SIZE, cell.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      }
+    }
+
+    // Game update: move snake, check collisions, update state.
+    function updateGame() {
+      let newHead = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+      // Check wall collisions
+      if (newHead.x < 0 || newHead.x >= GRID_WIDTH || newHead.y < 0 || newHead.y >= GRID_HEIGHT) {
+        endGame();
+        return;
+      }
+      // Check self-collision
+      if (snake.some(cell => cell.x === newHead.x && cell.y === newHead.y)) {
+        endGame();
+        return;
+      }
+      snake.unshift(newHead);
+      // Check if snake head is on a food cell (if any part of snake's head cell touches the food cell)
+      let hitFoodIndex = foods.findIndex(f => f.pos.x === newHead.x && f.pos.y === newHead.y);
+      if (hitFoodIndex !== -1) {
+        let food = foods[hitFoodIndex];
+        if (food.value === correctAnswer) {
+          score++;
+          // Generate new question and foods
+          currentQuestion = generateQuestion();
+          correctAnswer = currentQuestion.answerLatex;
+          foods = generateFoods(currentQuestion.func, correctAnswer, snake);
+          updateFoodElements();
+          updateQuestion();
+        } else {
+          lives--;
+          updateLives();
+          // Remove the wrong food
+          foods.splice(hitFoodIndex, 1);
+          let fe = foodElements.splice(hitFoodIndex, 1)[0];
+          fe.remove();
+          // Do not grow the snake
+          snake.pop();
+          if (lives <= 0) {
+            endGame();
+            return;
+          }
+        }
+      } else {
+        // Normal move: remove tail
+        snake.pop();
+      }
+      drawGame();
+    }
+
+    function endGame() {
+      clearInterval(gameInterval);
+      alert("Game Over! Score: " + score);
+      showMenu();
+    }
+
+    // Handle keyboard input for direction changes
+    document.addEventListener("keydown", function(e) {
+      if (gameState !== "playing") return;
+      if (e.key === "ArrowUp" && direction.y !== 1) {
+        direction = { x: 0, y: -1 };
+      } else if (e.key === "ArrowDown" && direction.y !== -1) {
+        direction = { x: 0, y: 1 };
+      } else if (e.key === "ArrowLeft" && direction.x !== 1) {
+        direction = { x: -1, y: 0 };
+      } else if (e.key === "ArrowRight" && direction.x !== -1) {
+        direction = { x: 1, y: 0 };
+      }
+    });
+
+    // Menu and settings handling
+    document.getElementById("playButton").addEventListener("click", function() {
+      showGame();
+    });
+    document.getElementById("settingsButton").addEventListener("click", function() {
+      showSettings();
+    });
+    document.getElementById("backButton").addEventListener("click", function() {
+      // Update settings from checkboxes
+      settings.functions.sin = document.getElementById("sinCheckbox").checked;
+      settings.functions.cos = document.getElementById("cosCheckbox").checked;
+      settings.functions.tan = document.getElementById("tanCheckbox").checked;
+      settings.quadrants[1] = document.getElementById("quad1").checked;
+      settings.quadrants[2] = document.getElementById("quad2").checked;
+      settings.quadrants[3] = document.getElementById("quad3").checked;
+      settings.quadrants[4] = document.getElementById("quad4").checked;
+      showMenu();
+    });
+
+    function showMenu() {
+      gameState = "menu";
+      menuDiv.style.display = "flex";
+      settingsDiv.style.display = "none";
+      gameContainer.style.display = "none";
+    }
+    function showSettings() {
+      gameState = "settings";
+      menuDiv.style.display = "none";
+      settingsDiv.style.display = "flex";
+      gameContainer.style.display = "none";
+    }
+    function showGame() {
+      gameState = "playing";
+      menuDiv.style.display = "none";
+      settingsDiv.style.display = "none";
+      gameContainer.style.display = "block";
+      initGame();
+      gameInterval = setInterval(updateGame, 1000 / 10);
+    }
+
+    // Start at the main menu.
+    showMenu();
+  </script>
+</body>
+</html>
