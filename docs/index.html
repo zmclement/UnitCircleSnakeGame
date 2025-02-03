@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.3/dist/katex.min.css">
   <style>
     body { margin: 0; padding: 0; font-family: sans-serif; background: #f2f2f2; }
+    
     /* Container for the game view */
     #game-container {
       position: relative;
@@ -67,6 +68,7 @@
     }
     /* Food elements are absolutely positioned divs */
     .food { position: absolute; width: 20px; height: 20px; pointer-events: none; }
+    
     /* Main menu styling: a sexier homepage */
     #menu {
       width: 640px;
@@ -80,7 +82,7 @@
       text-align: center;
       color: white;
       box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-      z-index: 100; /* Ensure the menu is on top */
+      z-index: 100;
     }
     #menu h1 { font-size: 36px; margin-bottom: 10px; }
     #welcome { margin: 20px; font-size: 16px; }
@@ -96,19 +98,32 @@
       transition: background 0.3s;
     }
     .button:hover { background: rgba(255,255,255,1); }
-    /* Settings screen styling */
+    
+    /* Settings screen styling: updated to be more visually appealing */
     #settings {
       width: 640px;
       height: 480px;
       margin: 20px auto;
-      background: #f2f2f2;
+      background: linear-gradient(135deg, #a1c4fd, #c2e9fb);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       text-align: center;
+      color: #333;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
     }
-    .checkbox { margin: 5px; }
+    #settings h1 {
+      font-size: 36px;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    /* Style checkboxes with increased font size and spacing */
+    #settings .checkbox {
+      font-size: 18px;
+      margin: 10px;
+      color: #333;
+    }
   </style>
 </head>
 <body>
@@ -335,7 +350,7 @@
           let div = document.createElement("div");
           div.className = "food";
           div.style.left = (food.pos.x * CELL_SIZE) + "px";
-          div.style.top = ((food.pos.y * CELL_SIZE) + 80) + "px";
+          div.style.top = ((food.pos.y * CELL_SIZE) + 80) + "px"; // offset for question area
           katex.render(food.value, div, { throwOnError: false, displayMode: false });
           gameContainer.appendChild(div);
           foodElements.push(div);
