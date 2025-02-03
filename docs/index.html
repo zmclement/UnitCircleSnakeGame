@@ -11,8 +11,8 @@
     /* Container for the game view */
     #game-container {
       position: relative;
-      width: 640px;
-      height: 480px;
+      width: 960px;
+      height: 720px;
       margin: 20px auto;
       background: #fff;
       border: 2px solid #333;
@@ -163,7 +163,7 @@
     <div id="question"></div>
     <div id="lives"></div>
     <div id="score"></div>
-    <canvas id="gameCanvas" width="640" height="400"></canvas>
+    <canvas id="gameCanvas" width="960" height="640"></canvas>
     <div id="gameOver"></div>
   </div>
 
@@ -183,8 +183,8 @@
       const settingsDiv = document.getElementById("settings");
 
       const CELL_SIZE = 20;
-      const GRID_WIDTH = 640 / CELL_SIZE;
-      const GRID_HEIGHT = 400 / CELL_SIZE; // canvas height is 400
+      const GRID_WIDTH = 960 / CELL_SIZE;
+      const GRID_HEIGHT = 640 / CELL_SIZE; // canvas height is 400
 
       let gameInterval;
       let gameState = "menu"; // "menu", "settings", "playing"
